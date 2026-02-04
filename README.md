@@ -67,7 +67,7 @@ code-collab is a high-performance, real-time collaborative code editor designed 
 
 5. **Start the environment**
    ```bash
-   bin/ot_dev
+   bin/dev
    ```
    This script starts both the web server and the OT workers. Visit `http://localhost:3000` to start vibe coding!
 
