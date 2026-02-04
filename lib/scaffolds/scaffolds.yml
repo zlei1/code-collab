@@ -1,8 +1,8 @@
 - key: web
-  name: "Web (HTML/JS/CSS)"
+  name: "Javascript"
   language: "javascript"
-  entry: "index.html"
-  run_cmd: "node run.js"
+  entry: "main.js"
+  run_cmd: "node main.js"
   image: "node:20-alpine"
 - key: python
   name: "Python"
