@@ -1,0 +1,15 @@
+<% content_for :head do %>
+  <%= stylesheet_link_tag "codemirror/codemirror", "data-turbo-track": "reload" %>
+  <%= javascript_include_tag "codemirror/codemirror", defer: true %>
+  <%= javascript_include_tag "ot/text-operation", defer: true %>
+  <%= javascript_include_tag "ot/selection", defer: true %>
+  <%= javascript_include_tag "ot/wrapped-operation", defer: true %>
+  <%= javascript_include_tag "ot/undo-manager", defer: true %>
+  <%= javascript_include_tag "ot/client", defer: true %>
+  <%= javascript_include_tag "ot/codemirror-adapter", defer: true %>
+  <%= javascript_include_tag "ot/editor-client", defer: true %>
+<% end %>
+
+<div class="collab-editor" data-controller="collaboration">
+  <textarea data-collaboration-target="textarea"></textarea>
+</div>

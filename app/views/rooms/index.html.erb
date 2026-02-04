@@ -1,0 +1,55 @@
+<header class="app-header">
+  <div class="user-profile">
+    <i data-lucide="code-2" style="color: var(--accent-primary); width: 24px; height: 24px;"></i>
+    <span style="font-weight: 600; font-family: 'JetBrains Mono';">CodeCollab</span>
+  </div>
+
+  <div class="user-profile">
+    <div class="user-meta">
+      <div style="font-weight: 500;"><%= user_display_name(current_user) %></div>
+      <div class="text-xs text-muted">Member</div>
+    </div>
+    <div class="avatar"><%= user_initials(current_user) %></div>
+    <%= button_to logout_path, method: :delete, class: "btn-icon", title: "Log out" do %>
+      <i data-lucide="log-out" style="width: 18px; height: 18px;"></i>
+    <% end %>
+  </div>
+</header>
+
+<main class="page-content">
+  <div class="action-bar">
+    <div>
+      <h2>Active Rooms</h2>
+      <div class="text-muted text-sm">Join a session or start a new one</div>
+    </div>
+
+    <div class="action-bar-actions">
+      <%= link_to new_room_path, class: "btn btn-primary" do %>
+        <i data-lucide="plus" style="width: 16px;"></i>
+        New room
+      <% end %>
+    </div>
+  </div>
+
+  <div class="rooms-grid">
+    <% @rooms.each do |room| %>
+      <%= link_to room_path(room.slug), class: "glass-panel room-card" do %>
+        <div class="room-status">Ready</div>
+        <h3><%= room.name %></h3>
+        <div class="room-meta">
+          <span><i data-lucide="layers" width="14"></i> <%= room.template_key %></span>
+          <span><i data-lucide="clock" width="14"></i> <%= time_ago_in_words(room.updated_at) %> ago</span>
+        </div>
+        <div class="text-sm text-muted">
+          Invite your team and start editing in real time.
+        </div>
+        <div class="tech-stack">
+          <span class="tech-badge"><%= room.template_key %></span>
+        </div>
+      <% end %>
+    <% end %>
+    <% if @rooms.empty? %>
+      <div class="glass-panel room-card empty">No rooms yet.</div>
+    <% end %>
+  </div>
+</main>

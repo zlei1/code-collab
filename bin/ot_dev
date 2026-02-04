@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REDIS_URL=${REDIS_URL:-redis://localhost:6379/0}
+OT_STREAM_SHARDS=${OT_STREAM_SHARDS:-1}
+OT_STREAM_SHARD_ID=${OT_STREAM_SHARD_ID:-0}
+
+export REDIS_URL OT_STREAM_SHARDS OT_STREAM_SHARD_ID
+
+bin/rails server &
+WEB_PID=$!
+
+bin/rails room_ot:worker &
+WORKER_PID=$!
+
+trap 'kill $WEB_PID $WORKER_PID' INT TERM
+wait $WEB_PID $WORKER_PID

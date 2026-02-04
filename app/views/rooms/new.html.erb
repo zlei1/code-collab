@@ -1,0 +1,35 @@
+<main class="page-content">
+  <header class="section-header">
+    <div>
+      <h2>Create a room</h2>
+      <div class="text-muted text-sm">Pick a scaffold and start your collaboration session.</div>
+    </div>
+    <%= link_to "Back", rooms_path, class: "btn btn-outline" %>
+  </header>
+
+  <div class="glass-panel form-card">
+    <%= form_with model: @room, class: "room-form" do |f| %>
+      <label>
+        Room name
+        <%= f.text_field :name, required: true, placeholder: "e.g. Phoenix" %>
+      </label>
+
+      <div class="scaffold-picker">
+        <p class="label">Choose a scaffold</p>
+        <div class="scaffold-grid">
+          <% @scaffolds.each do |scaffold| %>
+            <label class="scaffold-card">
+              <%= f.radio_button :template_key, scaffold["key"], required: true %>
+              <div>
+                <strong><%= scaffold["name"] %></strong>
+                <div class="muted"><%= scaffold["language"] %></div>
+              </div>
+            </label>
+          <% end %>
+        </div>
+      </div>
+
+      <%= f.submit "Create room", class: "btn btn-primary" %>
+    <% end %>
+  </div>
+</main>

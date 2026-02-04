@@ -1,0 +1,29 @@
+<div class="login-container">
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+
+  <div class="glass-panel login-card animate-fade-in">
+    <div class="brand-logo">
+      <i data-lucide="code-2"></i>
+      CodeCollab
+    </div>
+
+    <%= form_with url: login_path, method: :post do |f| %>
+      <div class="input-group">
+        <%= f.label :email, "Email Address", class: "input-label" %>
+        <%= f.email_field :email, required: true, value: params[:email], placeholder: "dev@example.com", class: "input-field" %>
+      </div>
+
+      <div class="input-group">
+        <%= f.label :password, "Password", class: "input-label" %>
+        <%= f.password_field :password, required: true, placeholder: "********", class: "input-field" %>
+      </div>
+
+      <%= f.submit "Log in", class: "btn btn-primary w-full" %>
+    <% end %>
+
+    <div class="auth-switch">
+      New here? <%= link_to "Create an account", signup_path %>
+    </div>
+  </div>
+</div>

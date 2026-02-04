@@ -1,0 +1,164 @@
+<% content_for :head do %>
+  <%= stylesheet_link_tag "codemirror/codemirror", "data-turbo-track": "reload" %>
+  <%= javascript_include_tag "codemirror/codemirror", defer: true %>
+  <%= javascript_include_tag "ot/text-operation", defer: true %>
+  <%= javascript_include_tag "ot/selection", defer: true %>
+  <%= javascript_include_tag "ot/wrapped-operation", defer: true %>
+  <%= javascript_include_tag "ot/undo-manager", defer: true %>
+  <%= javascript_include_tag "ot/client", defer: true %>
+  <%= javascript_include_tag "ot/codemirror-adapter", defer: true %>
+  <%= javascript_include_tag "ot/editor-client", defer: true %>
+<% end %>
+
+<div class="editor-shell" data-room-id="<%= @room.id %>" data-room-slug="<%= @room.slug %>" data-controller="share" data-share-url-value="<%= @share_url %>" data-share-room-slug-value="<%= @room.slug %>">
+  <header class="editor-header">
+    <div class="flex-item-center gap-2">
+      <%= link_to rooms_path, class: "btn-icon" do %>
+        <i data-lucide="chevron-left"></i>
+      <% end %>
+      <div class="editor-title"><%= @room.name %></div>
+      <span class="tech-badge"><%= @scaffold["name"] %></span>
+    </div>
+
+    <div class="flex-item-center gap-2">
+      <div class="users-stack">
+        <% @room.users.limit(3).each_with_index do |user, index| %>
+          <div class="user-dot" style="background: <%= avatar_color(index) %>; z-index: <%= 3 - index %>;">
+            <%= user_initials(user) %>
+          </div>
+        <% end %>
+        <% if @room.users.count > 3 %>
+          <div class="user-dot extra">+<%= @room.users.count - 3 %></div>
+        <% end %>
+      </div>
+      <button class="btn btn-primary" data-action="click->share#open">
+        <i data-lucide="share-2" style="width: 14px;"></i>
+        <span>Share</span>
+      </button>
+      <%= link_to rooms_path, class: "btn btn-outline" do %>
+        Leave
+      <% end %>
+
+      <div class="flex-item-center gap-2" style="margin-left: 12px; padding-left: 12px; border-left: 1px solid var(--border-light);">
+        <div class="avatar" style="width: 32px; height: 32px; font-size: 12px;"><%= user_initials(current_user) %></div>
+        <%= button_to logout_path, method: :delete, class: "btn-icon", title: "Log out" do %>
+          <i data-lucide="log-out" style="width: 16px; height: 16px;"></i>
+        <% end %>
+      </div>
+    </div>
+  </header>
+
+  <div class="reconnect-banner is-hidden" data-controller="reconnect">
+    <span class="reconnect-dot"></span>
+    <span class="reconnect-text" data-reconnect-target="message">Connection lost. Reconnecting...</span>
+  </div>
+
+  <div class="workspace">
+    <aside class="sidebar" data-controller="file-tree" data-file-tree-room-slug-value="<%= @room.slug %>">
+      <div class="sidebar-header">Explorer</div>
+      <div class="file-tree" data-file-tree-target="list"></div>
+      <div class="sidebar-footer" data-controller="run" data-run-room-slug-value="<%= @room.slug %>" data-run-room-id-value="<%= @room.id %>">
+        <button class="btn btn-primary" data-action="run#start" data-run-target="button">Run</button>
+        <pre class="run-output" data-run-target="output"></pre>
+      </div>
+    </aside>
+
+    <section class="editor-container" data-controller="editor file-indicator" data-editor-room-id-value="<%= @room.id %>" data-editor-room-slug-value="<%= @room.slug %>">
+      <div class="editor-tabs">
+        <div class="tab active">
+          <i data-lucide="file-code" width="14" style="color: #60a5fa;"></i>
+          <span data-file-indicator-target="name">No file selected</span>
+        </div>
+      </div>
+      <div class="editor-panel" style="position: relative;">
+        <!-- Loading Overlay -->
+        <div data-editor-target="loader" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-dark); z-index: 10; display: flex; align-items: center; justify-content: center;">
+          <div style="color: var(--text-secondary); display: flex; flex-direction: column; align-items: center; gap: 10px;">
+            Loading editor...
+          </div>
+        </div>
+        <div class="panel-overlay" data-editor-target="disconnectOverlay"></div>
+        <textarea data-editor-target="textarea"></textarea>
+      </div>
+    </section>
+
+    <aside class="sidebar">
+      <div class="sidebar-header">Chat</div>
+      <div class="chat-panel" data-controller="chat" data-chat-room-id-value="<%= @room.id %>" data-chat-current-user-id-value="<%= current_user.id %>">
+        <div class="chat-messages" data-chat-target="messages"></div>
+        <form class="chat-form" data-action="submit->chat#send">
+          <input type="text" placeholder="Type a message..." data-chat-target="input" required />
+          <button class="btn btn-primary chat-send" type="submit" aria-label="Send message" data-chat-target="sendButton">
+            <i data-lucide="send"></i>
+          </button>
+        </form>
+      </div>
+
+      <div class="sidebar-header">Video</div>
+      <div class="video-panel" data-controller="video" data-video-room-id-value="<%= @room.id %>" data-video-user-label-value="<%= user_presence_label(current_user) %>">
+        <div class="video-status" data-video-target="status"></div>
+        <div class="video-grid" data-video-target="grid"></div>
+        <div class="panel-overlay" data-video-target="disconnectOverlay"></div>
+        <div class="video-actions">
+          <button class="btn btn-primary" data-video-target="toggleButton" data-action="video#toggle">Join video</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="status-bar">
+    <div class="flex-item-center gap-2">
+      <i data-lucide="users" width="12"></i>
+      <%= pluralize(@room.users.count, "collaborator") %>
+      <span class="status-sep">|</span>
+      <i data-lucide="layers" width="12"></i>
+      <%= @scaffold["language"] %>
+    </div>
+    <div class="flex-item-center gap-2">
+      <i data-lucide="link" width="12"></i>
+      <%= @room.slug %>
+    </div>
+  </footer>
+
+  <!-- Share Modal Moved outside header to fix centering -->
+  <div class="modal-backdrop is-hidden" data-share-target="modal" style="display: none; align-items: center; justify-content: center;">
+    <div class="glass-panel modal-panel">
+      <button class="btn-icon" data-action="click->share#close" style="position: absolute; top: 12px; right: 12px;">
+        <i data-lucide="x"></i>
+      </button>
+      <h3 style="margin-bottom: 20px;">Share Room</h3>
+      
+      <div class="input-group">
+        <label class="input-label">Share Link</label>
+        <div class="flex-item-center gap-2">
+          <input type="text" class="input-field" readonly value="<%= @share_url %>" data-share-target="linkInput">
+          <button class="btn btn-primary" data-action="click->share#copy">Copy</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop is-hidden" data-editor-target="diffModal" style="display: none; align-items: center; justify-content: center;">
+    <div class="glass-panel modal-panel diff-modal">
+      <button class="btn-icon" data-editor-target="diffClose" style="position: absolute; top: 12px; right: 12px;">
+        <i data-lucide="x"></i>
+      </button>
+      <h3 style="margin-bottom: 8px;">Offline Changes Detected</h3>
+      <p class="text-muted text-sm" data-editor-target="diffMeta"></p>
+      <div class="diff-grid">
+        <div class="diff-block">
+          <div class="diff-title">Server version</div>
+          <pre data-editor-target="diffServer"></pre>
+        </div>
+        <div class="diff-block">
+          <div class="diff-title">Offline version</div>
+          <pre data-editor-target="diffLocal"></pre>
+        </div>
+      </div>
+      <div class="diff-actions">
+        <button class="btn btn-primary" data-editor-target="diffApply">Apply my offline changes</button>
+        <button class="btn btn-outline" data-editor-target="diffDiscard">Keep server version</button>
+      </div>
+    </div>
+  </div>
+</div>

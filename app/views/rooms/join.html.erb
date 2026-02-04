@@ -1,0 +1,26 @@
+<div class="login-container">
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+
+  <div class="glass-panel login-card animate-fade-in">
+    <div class="brand-logo">
+      <i data-lucide="code-2"></i>
+      CodeCollab
+    </div>
+
+    <div class="text-center text-sm text-muted" style="margin-bottom: var(--space-md);">
+      Join <%= @room.name %>
+    </div>
+
+    <%= form_with url: join_room_path(@room.slug), method: :post do |f| %>
+      <div class="text-center text-sm text-muted" style="margin-bottom: var(--space-md);">
+        Ready to start collaborating?
+      </div>
+      <%= f.submit "Join room", class: "btn btn-primary w-full" %>
+    <% end %>
+
+    <div class="auth-switch">
+      <%= link_to "Back", rooms_path %>
+    </div>
+  </div>
+</div>

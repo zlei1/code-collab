@@ -1,0 +1,18 @@
+- key: web
+  name: "Web (HTML/JS/CSS)"
+  language: "javascript"
+  entry: "index.html"
+  run_cmd: "node run.js"
+  image: "node:20-alpine"
+- key: python
+  name: "Python"
+  language: "python"
+  entry: "main.py"
+  run_cmd: "python main.py"
+  image: "python:3.12-alpine"
+- key: ruby
+  name: "Ruby"
+  language: "ruby"
+  entry: "main.rb"
+  run_cmd: "ruby main.rb"
+  image: "ruby:3.3-alpine"
