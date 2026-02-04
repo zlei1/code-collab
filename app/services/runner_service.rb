@@ -8,6 +8,7 @@ class RunnerService
     scaffold = Scaffolds::Catalog.find(room.template_key)
     raise "Unknown scaffold" unless scaffold
 
+    RoomWorkspace.export_to_disk(room)
     workspace = RoomWorkspace.root_path(room)
     image = scaffold["image"]
     command = scaffold["run_cmd"]
@@ -18,20 +19,25 @@ class RunnerService
     exit_code = nil
     pid = nil
 
-    Timeout.timeout(TIMEOUT_SECONDS) do
-      Open3.popen3(*docker_command(image, workspace, command)) do |stdin, out, err, wait_thr|
-        pid = wait_thr.pid
-        stdin.close
+    begin
+      Timeout.timeout(TIMEOUT_SECONDS) do
+        Open3.popen3(*docker_command(image, workspace, command)) do |stdin, out, err, wait_thr|
+          pid = wait_thr.pid
+          stdin.close
 
-        out_thread = Thread.new { out.read }
-        err_thread = Thread.new { err.read }
-        stdout = out_thread.value.to_s
-        stderr = err_thread.value.to_s
+          out_thread = Thread.new { out.read }
+          err_thread = Thread.new { err.read }
+          stdout = out_thread.value.to_s
+          stderr = err_thread.value.to_s
 
-        process_status = wait_thr.value
-        exit_code = process_status.exitstatus
-        status = process_status.success? ? "succeeded" : "failed"
+          process_status = wait_thr.value
+          exit_code = process_status.exitstatus
+          status = process_status.success? ? "succeeded" : "failed"
+        end
       end
+    ensure
+      # Optional: keep workspace for debugging if needed, but usually cleanup
+      # RoomWorkspace.cleanup(room)
     end
 
     { stdout: stdout, stderr: stderr, status: status, exit_code: exit_code }

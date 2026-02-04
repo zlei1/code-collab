@@ -1,20 +1,18 @@
 require "pathname"
-require "fileutils"
 
 class RoomFiles
   class NotFoundError < StandardError; end
   class BinaryFileError < StandardError; end
 
   def self.tree(room)
-    root = RoomWorkspace.root_path(room)
-    build_tree(root, root)
+    build_tree_from_db(room)
   end
 
   def self.read(room, path)
-    full_path = resolve_path(room, path)
-    raise NotFoundError unless File.file?(full_path)
+    file = room.room_files.find_by(path: path, is_directory: false)
+    raise NotFoundError unless file
 
-    data = File.binread(full_path)
+    data = file.content || ""
     raise BinaryFileError if data.include?("\x00")
 
     data.force_encoding("UTF-8")
@@ -22,34 +20,62 @@ class RoomFiles
   end
 
   def self.write(room, path, content)
-    full_path = resolve_path(room, path)
-    raise NotFoundError if File.directory?(full_path)
-    FileUtils.mkdir_p(File.dirname(full_path))
-    File.write(full_path, content)
+    validate_path!(path)
+
+    file = room.room_files.find_or_initialize_by(path: path)
+    raise NotFoundError if file.persisted? && file.is_directory
+
+    file.content = content
+    file.is_directory = false
+    file.save!
   end
 
   def self.resolve_path(room, relative_path)
-    root = Pathname.new(RoomWorkspace.root_path(room))
-    candidate = root.join(relative_path.to_s).cleanpath
-    root_prefix = root.to_s.end_with?(File::SEPARATOR) ? root.to_s : "#{root}#{File::SEPARATOR}"
-    raise NotFoundError unless candidate.to_s == root.to_s || candidate.to_s.start_with?(root_prefix)
+    # Validate path to prevent directory traversal attacks
+    path = relative_path.to_s
+    raise NotFoundError if path.empty?
+    raise NotFoundError if path.include?("..")
+    raise NotFoundError if path.start_with?("/")
 
-    candidate.to_s
+    path
   end
 
-  def self.build_tree(root, current)
-    entries = Dir.children(current).sort.map do |name|
-      next if name.start_with?(".")
-      next if %w[node_modules log tmp].include?(name)
+  def self.validate_path!(path)
+    raise NotFoundError if path.to_s.empty?
+    raise NotFoundError if path.include?("..")
+    raise NotFoundError if path.start_with?("/")
+  end
 
-      path = File.join(current, name)
-      rel = path.delete_prefix("#{root}/")
-      if File.directory?(path)
-        { type: "dir", name: name, path: rel, children: build_tree(root, path) }
+  def self.build_tree_from_db(room)
+    files = room.room_files.order(:path)
+
+    # Build a nested structure
+    root = []
+    dir_map = {}
+
+    files.each do |file|
+      parts = file.path.split("/")
+      name = parts.last
+      parent_path = parts[0..-2].join("/")
+
+      entry = if file.is_directory
+        { type: "dir", name: name, path: file.path, children: [] }
       else
-        { type: "file", name: name, path: rel }
+        { type: "file", name: name, path: file.path }
+      end
+
+      if parent_path.empty?
+        root << entry
+        dir_map[file.path] = entry if file.is_directory
+      else
+        parent = dir_map[parent_path]
+        if parent
+          parent[:children] << entry
+          dir_map[file.path] = entry if file.is_directory
+        end
       end
     end
-    entries.compact
+
+    root
   end
 end

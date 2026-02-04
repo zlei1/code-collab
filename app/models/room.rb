@@ -4,6 +4,7 @@ class Room < ApplicationRecord
   has_many :users, through: :room_memberships
   has_many :room_messages, dependent: :destroy
   has_many :room_runs, dependent: :destroy
+  has_many :room_files, dependent: :destroy
 
   validates :name, presence: true
   validates :slug, presence: true, uniqueness: true
@@ -18,10 +19,6 @@ class Room < ApplicationRecord
       candidate = SecureRandom.alphanumeric(8).downcase
       break candidate unless self.class.exists?(slug: candidate)
     end
-  end
-
-  def workspace_path
-    Rails.root.join("storage", "rooms", id.to_s)
   end
 
   def template_key_exists

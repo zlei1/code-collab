@@ -10,7 +10,18 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_02_03_083628) do
+ActiveRecord::Schema[8.1].define(version: 2026_02_04_090718) do
+  create_table "room_files", force: :cascade do |t|
+    t.text "content"
+    t.datetime "created_at", null: false
+    t.boolean "is_directory", default: false, null: false
+    t.string "path", null: false
+    t.integer "room_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["room_id", "path"], name: "index_room_files_on_room_id_and_path", unique: true
+    t.index ["room_id"], name: "index_room_files_on_room_id"
+  end
+
   create_table "room_memberships", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.string "role", default: "member", null: false
@@ -67,6 +78,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_03_083628) do
     t.index ["email"], name: "index_users_on_email", unique: true
   end
 
+  add_foreign_key "room_files", "rooms"
   add_foreign_key "room_memberships", "rooms"
   add_foreign_key "room_memberships", "users"
   add_foreign_key "room_messages", "rooms"
