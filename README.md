@@ -38,6 +38,7 @@ code-collab is a high-performance, real-time collaborative code editor designed 
 - Ruby 3.4.x
 - Redis
 - SQLite3
+- Docker (required for running the code execution environments)
 
 ### Installation
 
@@ -57,7 +58,14 @@ code-collab is a high-performance, real-time collaborative code editor designed 
    bin/rails db:prepare
    ```
 
-4. **Start the environment**
+4. **Pull required Docker images**
+   ```bash
+   docker pull node:20-alpine
+   docker pull python:3.12-alpine
+   docker pull ruby:3.3-alpine
+   ```
+
+5. **Start the environment**
    ```bash
    bin/ot_dev
    ```
