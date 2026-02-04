@@ -1,17 +1,17 @@
 - key: web
-  name: "Web"
+  name: "Node 20"
   language: "javascript"
   entry: "main.js"
   run_cmd: "node main.js"
   image: "node:20-alpine"
 - key: python
-  name: "Python"
+  name: "Python 3.12"
   language: "python"
   entry: "main.py"
   run_cmd: "python main.py"
   image: "python:3.12-alpine"
 - key: ruby
-  name: "Ruby"
+  name: "Ruby 3.3"
   language: "ruby"
   entry: "main.rb"
   run_cmd: "ruby main.rb"
