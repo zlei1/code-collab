@@ -475,7 +475,6 @@ Revision 通过 **ACK 消息** 同步：
 |------|------|
 | 什么情况触发 transform？ | 客户端 revision < 服务端 revision |
 | 并发才会 transform 吗？ | 是的，"并发" = 多个操作基于同一 revision |
-| 是发送同一个操作号吗？ | 不是。是发送了**旧的操作号**（落后于服务端） |
 | revision 如何同步？ | 收到 `ack` 后客户端更新本地 revision |
 
 **核心公式**：
@@ -484,14 +483,6 @@ concurrent_operations = @operations[revision - base_revision..-1]
 # 如果 revision == server.revision，concurrent = []，无需 transform
 # 如果 revision < server.revision，concurrent 不为空，需要 transform
 ```
-
----
-
-## 设计目标
-
-- **多机器支持**：单房间串行处理，跨房间并行处理
-- **共享状态**：状态和历史存储在 Redis 中
-- **历史压缩**：支持历史截断并强制客户端重新同步
 
 ---
 
@@ -531,20 +522,6 @@ presence:room:{room_id} (Hash)
 
 TTL 清理: ROOM_PRESENCE_TTL (默认 300 秒)
 ```
-
----
-
-## 全局协作
-
-全局协作功能使用固定的 room_id 和 path：
-
-```
-room_id = 0
-path = "__global__"
-```
-
-- Stream entries 中 `scope=global`
-- 广播到 `CollaborationChannel::STREAM_NAME`
 
 ---
 
