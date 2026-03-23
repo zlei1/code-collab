@@ -291,6 +291,202 @@ transform(B, A):
 
 ---
 
+## Transform 触发条件详解
+
+### 核心逻辑
+
+```ruby
+# lib/ot/server.rb:26-30
+def receive_operation(revision, operation)
+  # ...
+  index = revision - @base_revision
+  concurrent_operations = @operations.slice(index, @operations.length - index) || []
+  concurrent_operations.each do |concurrent|
+    operation = operation.class.transform(operation, concurrent)[0]
+  end
+  # ...
+end
+```
+
+### 什么时候需要 Transform？
+
+**当 `revision < server.revision` 时**，即客户端的 revision 落后于服务端。
+
+```
+服务端状态: revision = 5, operations = [op1, op2, op3, op4, op5]
+                                         ↑
+                                    base_revision = 0
+```
+
+### 具体计算过程示例
+
+```
+时间线:
+─────────────────────────────────────────────────────────►
+
+服务端 revision:    0 → 1 → 2 → 3 → 4 → 5
+服务端 operations:     [opA, opB, opC, opD, opE]
+
+客户端 A:
+  - 在 revision=2 时开始编辑
+  - 发送 operation 时带 revision=2
+  - 到达服务端时，revision 已经是 5
+
+客户端 B:
+  - 在 revision=3 时开始编辑
+  - 发送 operation 时带 revision=3
+  - 到达服务端时，revision 已经是 5
+```
+
+```ruby
+# 服务端当前状态
+@base_revision = 0
+@operations = [opA, opB, opC, opD, opE]  # 长度 = 5
+server.revision = 0 + 5 = 5
+
+# 客户端 A 发送操作，带 revision = 2
+index = 2 - 0 = 2
+concurrent_operations = @operations.slice(2, 3) = [opC, opD, opE]
+
+# 客户端 A 的操作需要与 opC, opD, opE 依次 transform！
+opA' = transform(opA, opC)[0]   # 先和 opC 变换
+opA'' = transform(opA', opD)[0] # 再和 opD 变换
+opA''' = transform(opA'', opE)[0] # 最后和 opE 变换
+```
+
+### 并发的定义
+
+**两个操作"并发"是指：它们基于相同的文档状态（相同的 revision）进行编辑。**
+
+```
+                文档状态 revision=3
+                       │
+         ┌─────────────┴─────────────┐
+         ▼                           ▼
+    客户端 A 编辑                  客户端 B 编辑
+    发送 revision=3               发送 revision=3
+         │                           │
+         │                           │
+    先到达服务端 ──────────────────► 后到达服务端
+    服务端 revision 变成 4
+                                  服务端 revision 已经是 4
+                                  但 B 带的 revision=3
+
+                                  index = 3 - 0 = 3
+                                  concurrent = [opA]  ← A 的操作
+
+                                  B' = transform(opB, opA)[0]
+```
+
+**核心结论**：
+- transform 发生在并发操作时
+- "并发" = 多个操作基于同一 revision
+- 客户端发送的是**旧的操作号**（落后于服务端），而非"同一个操作号"
+
+### Revision 同步机制
+
+Revision 通过 **ACK 消息** 同步：
+
+```
+客户端                                    服务端
+   │                                        │
+   │── operation(rev=3, opA) ──────────────►│
+   │                                        │ 处理成功
+   │                                        │ revision: 3 → 4
+   │◄─────────── ack ──────────────────────│
+   │                                        │
+   │  客户端收到 ack                         │
+   │  本地 revision = 4                     │
+   │                                        │
+   │── operation(rev=4, opB) ──────────────►│
+```
+
+**等待 ack 期间的行为**：
+
+```
+客户端状态（等待 ack 中）:
+  - confirmed_revision = 3    (已确认)
+  - pending_operations = [opA] (等待确认)
+  - local_revision = 4        (本地乐观更新后)
+
+用户继续编辑:
+  - 新操作 opB 基于 opA 的结果
+  - 放入 pending_operations = [opA, opB]
+  - 不立即发送，等 ack 后再发
+```
+
+### 三种场景详解
+
+#### 场景 1：无并发（顺序操作）
+
+```
+客户端 A: rev=3 → ack → rev=4 → 编辑 → rev=5 → 发送
+服务端:   rev=3 → 处理 → rev=4 → 处理 → rev=5
+
+无 transform，操作直接应用
+```
+
+#### 场景 2：有并发（两个客户端同时编辑）
+
+```
+         rev=3
+           │
+     ┌─────┴─────┐
+     ▼           ▼
+  客户端 A     客户端 B
+  revision=3   revision=3
+     │           │
+     ▼           │
+  先到达         │
+     │           │
+  rev→4          │
+     │           ▼
+     │        后到达，带 rev=3
+     │           │
+     │        index = 3 - 0 = 3
+     │        concurrent = [opA]
+     │           │
+     │        transform(opB, opA)
+     │           │
+     ▼           ▼
+  rev=5       rev=5
+```
+
+#### 场景 3：单客户端多个 pending 操作
+
+```
+客户端快速输入:
+  op1 (rev=3) → 发送
+  op2 (基于op1) → 放入 pending
+  op3 (基于op2) → 放入 pending
+
+收到 ack(op1):
+  发送 op2 (rev=4)
+
+收到 ack(op2):
+  发送 op3 (rev=5)
+
+服务端依次处理，无 transform（因为是同一客户端顺序操作）
+```
+
+### 总结表
+
+| 问题 | 答案 |
+|------|------|
+| 什么情况触发 transform？ | 客户端 revision < 服务端 revision |
+| 并发才会 transform 吗？ | 是的，"并发" = 多个操作基于同一 revision |
+| 是发送同一个操作号吗？ | 不是。是发送了**旧的操作号**（落后于服务端） |
+| revision 如何同步？ | 收到 `ack` 后客户端更新本地 revision |
+
+**核心公式**：
+```ruby
+concurrent_operations = @operations[revision - base_revision..-1]
+# 如果 revision == server.revision，concurrent = []，无需 transform
+# 如果 revision < server.revision，concurrent 不为空，需要 transform
+```
+
+---
+
 ## Redis 数据结构
 
 | Key | 类型 | 用途 |
