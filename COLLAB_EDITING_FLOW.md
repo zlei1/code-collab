@@ -487,15 +487,64 @@ concurrent_operations = @operations[revision - base_revision..-1]
 
 ---
 
+## 设计目标
+
+- **多机器支持**：单房间串行处理，跨房间并行处理
+- **共享状态**：状态和历史存储在 Redis 中
+- **历史压缩**：支持历史截断并强制客户端重新同步
+
+---
+
 ## Redis 数据结构
+
+### OT 相关 Keys
 
 | Key | 类型 | 用途 |
 |-----|------|------|
-| `ot:ops:{shard}` | Stream | 操作消息队列 |
-| `ot:ops:{shard}:checkpoint` | String | Worker 消费位点 |
-| `ot:state:{room_id}:{path}` | Hash | 文档状态 `{doc, rev, base_rev, last_id}` |
-| `ot:history:{room_id}:{path}` | List | 操作历史 (JSON) |
-| `ot:clients:{room_id}:{path}` | Hash | 客户端信息 `{client_id: {name, selection, seen_at}}` |
+| `ot:ops:{shard}` | Stream | 操作消息队列，字段: `scope`, `room_id`, `path`, `client_id`, `revision`, `operation`, `selection` |
+| `ot:ops:{shard}:checkpoint` | String | Worker 消费位点 (最后处理的 stream id) |
+| `ot:state:{room_id}:{path}` | Hash | 文档状态 |
+| `ot:history:{room_id}:{path}` | List | 操作历史 (JSON entries with `operation` and `selection`) |
+| `ot:clients:{room_id}:{path}` | Hash | 客户端信息 `{client_id: {name?, selection?, seen_at}}` |
+
+#### ot:state 详细字段
+
+```
+ot:state:{room_id}:{path} (Hash)
+├── doc: string        # 当前文档内容
+├── rev: integer       # 绝对版本号
+├── base_rev: integer  # 历史列表的基准版本号
+└── last_id: string    # 最后处理的 stream entry id (可选)
+```
+
+### Presence Key
+
+| Key | 类型 | 用途 |
+|-----|------|------|
+| `presence:room:{room_id}` | Hash | 房间在线用户信息 |
+
+```
+presence:room:{room_id} (Hash)
+├── client_id_1 -> JSON { user_id, label, email, has_media, seen_at }
+├── client_id_2 -> JSON { ... }
+└── ...
+
+TTL 清理: ROOM_PRESENCE_TTL (默认 300 秒)
+```
+
+---
+
+## 全局协作
+
+全局协作功能使用固定的 room_id 和 path：
+
+```
+room_id = 0
+path = "__global__"
+```
+
+- Stream entries 中 `scope=global`
+- 广播到 `CollaborationChannel::STREAM_NAME`
 
 ---
 
@@ -520,7 +569,15 @@ end
 
 ## 分片机制
 
-分片用于水平扩展 Worker 处理能力：
+### 为什么需要分片
+
+OT 算法要求：
+- **单房间串行处理**：同一文档的操作必须按顺序处理
+- **跨房间并行处理**：不同文档的操作可以并行
+
+分片将每个 `room_id:path` 映射到一个分片，确保只有一个 Worker 处理该房间的操作。
+
+### 工作原理
 
 ```ruby
 # app/services/room_ot_redis.rb:36-40
@@ -530,9 +587,59 @@ def self.shard_for(room_id, path)
 end
 ```
 
-- 同一 `room_id:path` 的操作始终路由到同一分片
-- 不同文档可以并行处理
-- 默认 `OT_STREAM_SHARDS=1`，单 Worker 足以处理中等规模
+- 计算: `shard = crc32("#{room_id}:#{path}") % OT_STREAM_SHARDS`
+- Stream key: `ot:ops:{shard}`
+- Worker 通过 `OT_STREAM_SHARD_ID` 指定处理的分片
+
+### 环境变量
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `OT_STREAM_SHARDS` | 总分片数，所有 Web + Worker 进程必须使用相同值 | `1` |
+| `OT_STREAM_SHARD_ID` | 当前 Worker 处理的分片索引，范围: `0 <= id < OT_STREAM_SHARDS` | `0` |
+
+### 示例
+
+#### 单分片模式（默认）
+
+```
+OT_STREAM_SHARDS=1  →  所有房间都路由到 shard 0
+OT_STREAM_SHARD_ID=0  →  启动唯一需要的 Worker
+```
+
+适用于中小规模，单个 Worker 足够处理所有操作。
+
+#### 多分片模式（16 分片）
+
+```
+OT_STREAM_SHARDS=16  →  分片范围 0..15
+
+# 启动 16 个 Worker（每台机器或容器一个）
+Worker 1:  OT_STREAM_SHARD_ID=0
+Worker 2:  OT_STREAM_SHARD_ID=1
+...
+Worker 16: OT_STREAM_SHARD_ID=15
+
+# 或只启动部分 Worker（降低容量但节省资源）
+Worker 1:  OT_STREAM_SHARD_ID=0
+Worker 2:  OT_STREAM_SHARD_ID=1
+...
+```
+
+### 注意事项
+
+- **所有进程必须使用相同的 `OT_STREAM_SHARDS` 值**，否则操作会被路由到错误的分片
+- 同一 `room_id:path` 始终路由到同一分片
+- 不同文档可以并行处理，实现水平扩展
+- 监控建议：stream lag 和 history size
+
+---
+
+## 操作注意事项
+
+- 启动 Worker: `bin/rails room_ot:worker`，配合分片环境变量
+- Web 和 Worker 必须使用相同的 Redis 和分片配置
+- 建议监控 stream lag 和 history size
 
 ---
 
