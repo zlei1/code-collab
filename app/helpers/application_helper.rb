@@ -1,5 +1,5 @@
 module ApplicationHelper
-  AVATAR_COLORS = ["#3B82F6", "#F472B6", "#F59E0B", "#22C55E", "#8B5CF6"].freeze
+  AVATAR_COLORS = [ "#3B82F6", "#F472B6", "#F59E0B", "#22C55E", "#8B5CF6" ].freeze
 
   def user_display_name(user)
     return "Guest" unless user

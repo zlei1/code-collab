@@ -34,7 +34,7 @@ class RoomPresence
           user_id: payload["user_id"],
           label: payload["label"],
           email: payload["email"],
-          has_media: payload["has_media"],
+          has_media: payload["has_media"]
         }
       end.sort_by { |entry| entry[:label].to_s.downcase }
     end
@@ -47,7 +47,7 @@ class RoomPresence
           user_id: user_id,
           label: entries.first["label"],
           email: entries.first["email"],
-          has_media: entries.any? { |payload| payload["has_media"] },
+          has_media: entries.any? { |payload| payload["has_media"] }
         }
       end.sort_by { |entry| entry[:label].to_s.downcase }
     end
@@ -64,7 +64,7 @@ class RoomPresence
         type: "presence",
         clients: clients,
         room_id: room_id,
-        users: users,
+        users: users
       })
     end
 
@@ -102,7 +102,7 @@ class RoomPresence
       {
         "user_id" => user.id,
         "label" => label_for(user),
-        "email" => user.email.to_s,
+        "email" => user.email.to_s
       }
     end
 
