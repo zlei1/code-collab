@@ -45,7 +45,7 @@ module OT
         if self.class.insert?(@ops[-2])
           @ops[-2] += str
         else
-          @ops[-1], @ops[-2] = @ops[-2], str
+          @ops << str
         end
       else
         @ops << str
